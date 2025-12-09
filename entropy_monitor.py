@@ -18,7 +18,6 @@ MAX_TOTAL_SAMPLE = 64 * 1024
 ENTROPY_THRESHOLD = 7.2         # absolute entropy threshold
 ENTROPY_DELTA_THRESHOLD = 0.9  # increase vs baseline
 DEBOUNCE_SECONDS = 0.5         # coalesce repeated events
-BASELINE_FILE = "entropy_baseline.json"
 SESSIONS_DIR = "entropy_sessions"  # Directory to store session data
 EXCLUDE_EXT = {'.zip', '.rar', '.7z', '.gz', '.jpg', '.jpeg', '.png', '.mp4', '.mp3', '.iso'}
 EXCLUDE_DIRS = []  # add system dirs here (absolute paths)
@@ -342,60 +341,3 @@ def stop_monitoring() -> None:
             pass
         
         current_session_id = None
-
-
-if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Entropy-based file change monitor")
-    parser.add_argument("paths", nargs="+", help="Paths to monitor (absolute)")
-    args = parser.parse_args()
-    
-    # Add common excludes for Windows and Linux
-    if sys.platform.startswith("win"):
-        EXCLUDE_DIRS.extend([
-            str(Path("C:/Windows").resolve()),
-            str(Path("C:/Program Files").resolve()),
-            str(Path("C:/Program Files (x86)").resolve())
-        ])
-    else:
-        EXCLUDE_DIRS.extend([
-            str(Path("/proc").resolve()),
-            str(Path("/sys").resolve()),
-            str(Path("/dev").resolve())
-        ])
-    
-    # Load baseline
-    baseline = load_baseline(BASELINE_FILE)
-    
-    # Create and start observer
-    event_handler = EntropyHandler()
-    obs = Observer()
-    for path in args.paths:
-        obs.schedule(event_handler, path, recursive=True)
-    obs.start()
-    
-    print("Monitoring paths:", args.paths)
-    
-    try:
-        while True:
-            time.sleep(5)
-            # Periodically persist baseline
-            with lock:
-                save_baseline(BASELINE_FILE, baseline)
-    except KeyboardInterrupt:
-        obs.stop()
-    obs.join()
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Entropy-based file change monitor")
-    parser.add_argument("paths", nargs="+", help="Paths to monitor (absolute)")
-    args = parser.parse_args()
-    # add common excludes for Windows and Linux if not provided
-    if sys.platform.startswith("win"):
-        EXCLUDE_DIRS.extend([str(Path("C:/Windows").resolve()), str(Path("C:/Program Files").resolve()), str(Path("C:/Program Files (x86)").resolve())])
-    else:
-        EXCLUDE_DIRS.extend([str(Path("/proc").resolve()), str(Path("/sys").resolve()), str(Path("/dev").resolve())])
-    main(args.paths)

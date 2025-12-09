@@ -772,6 +772,20 @@ def main():
             
             with tab1:
                 st.markdown("### Monitored Files (Current Session)")
+                
+                # Auto-refresh every 3 seconds when monitoring is active
+                if st.session_state.entropy_monitoring:
+                    import time
+                    # Initialize last refresh time
+                    if 'last_refresh_time' not in st.session_state:
+                        st.session_state.last_refresh_time = time.time()
+                    
+                    # Check if 3 seconds have passed
+                    current_time = time.time()
+                    if current_time - st.session_state.last_refresh_time >= 3:
+                        st.session_state.last_refresh_time = current_time
+                        st.rerun()
+                
                 if st.session_state.entropy_session_id:
                     session_file = Path(f"entropy_sessions/session_{st.session_state.entropy_session_id}.json")
                     if session_file.exists():
@@ -796,6 +810,8 @@ def main():
                                 # Show subset with most important columns
                                 display_df = df[['File', 'Entropy', 'Status']].copy()
                                 st.dataframe(display_df, use_container_width=True, height=400)
+                                
+                                st.caption(f"📊 {len(files_data)} files • Auto-refreshing every 3s")
                             else:
                                 st.info("ℹ️ No files tracked yet. Files will appear as they're modified.")
                         except Exception as e:

@@ -1,0 +1,21 @@
+{
+  "files": {
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 0.0,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json": 5.1117853633481625,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_185258.json": 5.0915743750556,
+    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 0.0,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json": 5.061721861709225,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json.tmp": 5.112149037111843,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_185258.json.tmp": 5.056250936088052,
+    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json.tmp": 5.134562156276639,
+    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_185258.json.tmp": 5.087847107521552,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\40\\2ea01ac7e1ecb2feecc2bbe88f924d64303517": 7.975878797954522,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\58\\52efcca236a2d011000ff53ca152bbfff68a18": 7.983795316693053,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\03\\6afca484f3ad15b1cd50cc5cab8af6da882f2c": 7.351851867575491,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_monitor.py": 4.71245434545456
+  },
+  "metadata": {
+    "start_time": "2025-12-09T18:52:58.873957",
+    "watch_path": "D:\\Projects\\buck"
+  }
+}
