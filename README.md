@@ -1,11 +1,12 @@
 # 🛡️ Ransomware Detection & VirusTotal Scanner
 
-A comprehensive integrated system for analyzing files using two complementary approaches:
+A comprehensive integrated system for analyzing files using three complementary approaches:
 
 1. **🔬 Static Ransomware Detector**: ML-based analysis using static PE header features
 2. **🔍 VirusTotal Scanner**: Cloud-based threat intelligence with 70+ antivirus engines
+3. **📈 Entropy Monitor**: Real-time file system monitoring for suspicious encryption activity
 
-This project combines a RandomForest classifier (trained on the Kaggle ransomware dataset) with the VirusTotal API to provide both offline static analysis and cloud-based threat intelligence in a single Streamlit web application.
+This project combines a RandomForest classifier (trained on the Kaggle ransomware dataset), VirusTotal API integration, and entropy-based monitoring to provide offline static analysis, cloud-based threat intelligence, and real-time ransomware detection in a single Streamlit web application.
 
 ## Features
 
@@ -14,18 +15,29 @@ This project combines a RandomForest classifier (trained on the Kaggle ransomwar
 - **ML-Based Classification**: Random Forest model with ~99.6% accuracy
 - **Safe Analysis**: Extracts static PE header features, never executes files
 - **Detailed Results**: Shows prediction, confidence score, and extracted features
-- **Single or Batch**: Analyze individual files through the web interface
+- **Single File Analysis**: Upload PE files through the web interface
 
 ### 🔍 VirusTotal Scanner
 - **Cloud Threat Intelligence**: Check against 70+ antivirus engines
 - **Folder Scanning**: Recursively scan entire directories
 - **Single File Scanning**: Upload files or provide file paths
 - **Real-time Results**: Live progress tracking during scans
-- **Export Capabilities**: Download results as TXT or CSV
+- **Export Capabilities**: Download results as TXT logs
 - **Log File Saving**: Automatic logging of scan results
 
+### 📈 Entropy Monitor (NEW)
+- **Real-time Monitoring**: Watch directories for suspicious file modifications
+- **Entropy Analysis**: Detects high-entropy files indicating encryption
+- **Session-based Tracking**: Each monitoring session is isolated with unique ID
+- **Interactive Dashboard**: Live updates with 3-second auto-refresh
+- **Visual Analytics**: Histogram showing entropy distribution with thresholds
+- **Alert System**: Real-time notifications for suspicious entropy levels
+- **Historical Sessions**: Browse and compare previous monitoring sessions
+- **Threshold Detection**: Configurable alert thresholds (default: 7.2 entropy)
+- **Delta Tracking**: Detects sudden entropy increases (ransomware encryption)
+
 ### 🎯 Combined Analysis
-- **Side-by-Side Comparison**: View both analysis methods simultaneously
+- **Side-by-Side Comparison**: View Static Detector and VirusTotal results simultaneously
 - **Risk Assessment**: Unified risk scoring from both methods
 - **Detailed Summary**: Integrated recommendations based on all data
 - **Confidence Metrics**: Combined confidence and detection metrics
@@ -139,6 +151,32 @@ View all VirusTotal folder scan results:
 - Download results as TXT
 - Clear results for new scan
 
+### 📈 Entropy Monitor Tab (NEW)
+
+Monitor directories in real-time for ransomware encryption activity:
+
+1. Click on **📈 Entropy Monitor** tab
+2. Enter folder path to monitor (e.g., `C:\Users\Documents`)
+3. Click **▶️ Start Monitoring**
+4. View live data in three tabs:
+   - **📊 Current Session**: Live table of monitored files with entropy values
+   - **📋 Real-time Alerts**: Log of suspicious detections and alerts
+   - **📂 Previous Sessions**: Historical monitoring sessions
+5. Left panel shows:
+   - Monitoring status indicator
+   - Live statistics (files monitored, avg/max entropy)
+   - Entropy distribution histogram
+   - Download session data button
+6. Click **⏹️ Stop Monitoring** when done
+
+**How it works**:
+- Calculates Shannon entropy for each file (0-8 scale)
+- Files with entropy ≥7.2 flagged as suspicious (highly compressed/encrypted)
+- Tracks entropy changes (delta ≥0.9 triggers alert)
+- Auto-refreshes every 3 seconds while monitoring
+- Each session gets unique ID and isolated data storage
+- Background thread scans existing files on startup
+
 ## Output Format
 
 ### Ransomware Detector Results
@@ -174,6 +212,19 @@ VirusTotal Results:
 
 Recommendation: 🚨 CRITICAL - Both methods flagged this file as suspicious. Do NOT execute.
 ```
+
+### Entropy Monitor Output
+```
+Session: 20251209_143022
+Path: C:\Users\Documents
+Files Monitored: 127
+Avg Entropy: 5.234
+Max Entropy: 7.856
+
+[ALERT 14:30:45] C:\Users\Documents\file.docx | ent=7.85 prev=4.12 reasons=ent>=7.2,delta>=0.9
+```
+
+Session data stored in: `entropy_sessions/session_<timestamp>.json`
 
 ## Configuration
 
@@ -288,6 +339,7 @@ Ransomware_detection_classification/
 ├── feature_extractor.py            # PE feature extraction logic
 ├── file_handler.py                 # File handling and hashing utilities
 ├── virustotal.py                   # VirusTotal API wrapper
+├── entropy_monitor.py              # Real-time entropy monitoring (NEW)
 ├── train_model.py                  # Model training script
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Environment variables template
@@ -296,6 +348,8 @@ Ransomware_detection_classification/
 ├── artifacts/
 │   ├── random_forest_model.joblib # Trained model
 │   └── feature_metadata.json       # Feature metadata
+├── entropy_sessions/               # Session data storage (NEW)
+│   └── session_*.json              # Individual session files
 └── __pycache__/                    # Python cache
 ```
 
@@ -317,6 +371,19 @@ streamlit run app.py
 ```
 
 ## Changelog
+
+### Version 3.0.0 - Real-time Monitoring
+- ✨ Added Entropy Monitor for real-time ransomware detection
+- ✨ Session-based data isolation with unique IDs
+- ✨ Interactive histogram visualization with Plotly
+- ✨ Auto-refresh every 3 seconds during monitoring
+- ✨ Historical session browser with download capability
+- ✨ Real-time alert system with threshold detection
+- ✨ Background file scanning on monitor startup
+- 🔧 Removed Combined Analysis page (streamlined UI)
+- 🔧 Updated to Streamlit width='stretch' API
+- 🔧 Optimized architecture (removed subprocess overhead)
+- 📚 Comprehensive documentation for entropy monitoring
 
 ### Version 2.0.0 - Integrated System
 - ✨ Added VirusTotal Scanner with folder and single file scanning
@@ -361,5 +428,10 @@ Always follow proper malware handling procedures and security best practices.
 
 ---
 
-**Remember**: This integrated system provides two complementary analysis methods. Use both approaches together for comprehensive file evaluation. Results are for triage; always perform additional verification as needed.
+**Remember**: This integrated system provides three complementary analysis methods:
+1. **Static PE Analysis** - Fast offline ML-based detection
+2. **VirusTotal Cloud Intelligence** - Community-driven threat database
+3. **Real-time Entropy Monitoring** - Detect active encryption/ransomware
+
+Use all approaches together for comprehensive file and system evaluation. Results are for triage; always perform additional verification as needed.
 - Feature expectations match the training notebook: `Machine, DebugSize, DebugRVA, MajorImageVersion, MajorOSVersion, ExportRVA, ExportSize, IatVRA, MajorLinkerVersion, MinorLinkerVersion, NumberOfSections, SizeOfStackReserve, DllCharacteristics, ResourceSize, BitcoinAddresses` (label: `Benign`).

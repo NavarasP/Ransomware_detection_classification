@@ -871,14 +871,20 @@ def main():
                 else:
                     st.info("ℹ️ No previous sessions found. Start monitoring to create a new session.")
         
-        # Auto-refresh when monitoring is active
+        # Auto-refresh when monitoring is active - place at end of Entropy Monitor section
         if st.session_state.entropy_monitoring:
             import time
-            current_time = time.time()
-            if current_time - st.session_state.last_update >= 3:
-                st.session_state.last_update = current_time
-                time.sleep(0.1)  # Small delay to ensure data is written
-                st.rerun()
+            # Add JavaScript-based auto-refresh
+            st.markdown(
+                """
+                <script>
+                setTimeout(function() {
+                    window.parent.location.reload();
+                }, 3000);
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
     
     st.divider()
     st.caption(
