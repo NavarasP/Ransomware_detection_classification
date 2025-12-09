@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Protocol, Sequence, Tuple, runtime_checkable
-
 import json
 import tempfile
+import os
 from pathlib import Path
+from datetime import datetime
 
 import joblib
 import pandas as pd
 import streamlit as st
 
 from feature_extractor import FEATURE_COLUMNS, compute_md5, extract_features
+from file_handler import FileHandler
+from virustotal import VirusTotalAPI
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Silence Pylance noise for unknown members/vars from third-party stubs
 # pyright: reportMissingTypeStubs=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
@@ -27,6 +34,7 @@ class EstimatorProtocol(Protocol):
 
     @property
     def classes_(self) -> Sequence[Any]: ...
+
 
 MODEL_PATH = Path("artifacts/random_forest_model.joblib")
 META_PATH = Path("artifacts/feature_metadata.json")
@@ -55,79 +63,532 @@ def format_prediction(label: int) -> str:
     return "Benign" if label == 1 else "Ransomware"
 
 
+def init_session_state():
+    """Initialize session state variables"""
+    if 'scan_results' not in st.session_state:
+        st.session_state.scan_results = []
+    if 'vt_api' not in st.session_state:
+        st.session_state.vt_api = None
+
+
+def get_vt_api() -> VirusTotalAPI | None:
+    """Get or create VirusTotal API instance"""
+    api_key = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
+    
+    if not api_key:
+        return None
+    
+    if st.session_state.vt_api is None:
+        st.session_state.vt_api = VirusTotalAPI(api_key)
+    
+    return st.session_state.vt_api
+
+
 def main():
-    st.set_page_config(page_title="Ransomware Detector", page_icon="🛡️", layout="centered")
-    st.title("Ransomware Detector (Static PE Analysis)")
-    st.caption("Upload a Windows PE (.exe) file to predict if it is benign or ransomware.")
-
-    with st.expander("How it works", expanded=False):
-        st.markdown(
-            """
-            - Extracts static header features from the PE file (no execution).
-            - Feeds features to a RandomForest model trained on the Kaggle dataset.
-            - Outputs a binary label plus model confidence.
-            """
+    st.set_page_config(
+        page_title="Ransomware Detection & VirusTotal Scanner",
+        page_icon="🛡️",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    init_session_state()
+    
+    # Check for VirusTotal API key
+    api_key = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
+    vt_available = bool(api_key)
+    
+    # Sidebar Navigation
+    st.sidebar.title("🛡️ Scanner")
+    st.sidebar.markdown("---")
+    
+    if not vt_available:
+        st.sidebar.warning(
+            "⚠️ VirusTotal API key not found in `.env` file\n\n"
+            "Create a `.env` file with:\n"
+            "`VIRUSTOTAL_API_KEY=your_key_here`\n\n"
+            "Get your free API key from https://www.virustotal.com/"
         )
-
-    uploaded = st.file_uploader("Upload a PE (.exe) file", type=["exe"])
-
-    if not uploaded:
-        st.info("Awaiting file upload.")
-        return
-
-    try:
-        model, feature_order = load_model()
-    except FileNotFoundError as exc:
-        st.error(str(exc))
-        return
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".exe") as tmp:
-        tmp.write(uploaded.getbuffer())
-        tmp_path = Path(tmp.name)
-
-    try:
-        feats = extract_features(tmp_path)
-        md5 = compute_md5(tmp_path)
-        df = pd.DataFrame([feats])
-
-        missing = [c for c in feature_order if c not in df.columns]
-        if missing:
-            st.error(f"Extractor missing expected features: {missing}")
-            return
-
-        df = df[feature_order]
-        prediction = int(model.predict(df)[0])
-
-        proba = None
-        if hasattr(model, "predict_proba"):
-            classes = list(getattr(model, "classes_", []))
-            class_index = classes.index(1) if classes and 1 in classes else 0
-            probs = model.predict_proba(df)[0]
-            proba = float(probs[class_index]) if probs is not None else None
-
-        st.subheader("Result")
-        label_text = format_prediction(prediction)
-        if label_text == "Ransomware":
-            st.error(f"Prediction: {label_text}")
+        st.sidebar.markdown("---")
+        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector"])
+    else:
+        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "🔍 VirusTotal Scanner", "🎯 Combined Analysis", "📊 Results"])
+    
+    # Main title
+    st.title("🛡️ Ransomware Detection & VirusTotal Scanner")
+    st.markdown("Comprehensive file analysis using static ML and cloud-based threat intelligence")
+    st.markdown("---")
+    
+    # PAGE ROUTING
+    if page == "🔬 Ransomware Detector":
+        st.subheader("🔬 Ransomware Detector (Static PE Analysis)")
+        st.markdown(
+            "Upload a Windows PE (.exe) file to predict if it is benign or ransomware "
+            "using static header feature analysis."
+        )
+        
+        with st.expander("How it works", expanded=False):
+            st.markdown(
+                """
+                - Extracts static header features from the PE file (no execution).
+                - Feeds features to a RandomForest model trained on the Kaggle dataset.
+                - Outputs a binary label plus model confidence.
+                - **Safe**: Does not execute the file or require network access.
+                """
+            )
+        
+        uploaded = st.file_uploader("Upload a PE (.exe) file", type=["exe"], key="ransomware_upload")
+        
+        if uploaded:
+            try:
+                model, feature_order = load_model()
+            except FileNotFoundError as exc:
+                st.error(str(exc))
+                return
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".exe") as tmp:
+                tmp.write(uploaded.getbuffer())
+                tmp_path = Path(tmp.name)
+            
+            try:
+                feats = extract_features(tmp_path)
+                md5 = compute_md5(tmp_path)
+                df = pd.DataFrame([feats])
+                
+                missing = [c for c in feature_order if c not in df.columns]
+                if missing:
+                    st.error(f"Extractor missing expected features: {missing}")
+                    return
+                
+                df = df[feature_order]
+                prediction = int(model.predict(df)[0])
+                
+                proba = None
+                if hasattr(model, "predict_proba"):
+                    classes = list(getattr(model, "classes_", []))
+                    class_index = classes.index(1) if classes and 1 in classes else 0
+                    probs = model.predict_proba(df)[0]
+                    proba = float(probs[class_index]) if probs is not None else None
+                
+                # Results display
+                st.subheader("📋 Analysis Result")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                label_text = format_prediction(prediction)
+                with col1:
+                    if label_text == "Ransomware":
+                        st.error(f"**Prediction**: {label_text}")
+                    else:
+                        st.success(f"**Prediction**: {label_text}")
+                
+                with col2:
+                    if proba is not None:
+                        st.metric("Confidence", f"{proba:.2%}")
+                
+                with col3:
+                    st.metric("File Hash (MD5)", md5[:12] + "...")
+                
+                st.divider()
+                
+                # Full hash display
+                st.text_area("Full MD5 Hash:", value=md5, disabled=True, height=60)
+                
+                # Store for combined analysis
+                st.session_state.ransomware_result = {
+                    'file_name': uploaded.name,
+                    'prediction': label_text,
+                    'confidence': proba,
+                    'md5': md5,
+                    'features': df.to_dict('records')[0]
+                }
+                
+                # Features table
+                with st.expander("📊 Extracted Features", expanded=False):
+                    st.dataframe(df.T.rename(columns={0: "value"}), use_container_width=True)
+                
+            except Exception as exc:
+                st.error(f"Failed to analyze file: {exc}")
+            finally:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
         else:
-            st.success(f"Prediction: {label_text}")
-
-        if proba is not None:
-            st.write(f"Confidence (benign class): {proba:.2%}")
-
-        st.write("MD5:", md5)
+            st.info("👆 Upload a PE file to begin analysis")
+        
+        st.caption("⚠️ This tool performs static analysis only; results are for triage, not certification.")
+    
+    # PAGE 2: VirusTotal Scanner
+    elif page == "🔍 VirusTotal Scanner":
+        if vt_available:
+            st.subheader("🔍 VirusTotal File Scanner")
+            st.markdown("Scan files and folders using the VirusTotal API for comprehensive threat intelligence")
+            
+            vt_api = get_vt_api()
+            
+            if not vt_api:
+                st.error("Failed to initialize VirusTotal API")
+            else:
+                # Sub-tabs for different scanning modes
+                vt_mode = st.radio(
+                    "Select scanning mode:",
+                    ["📄 Single File", "📁 Folder Scan"],
+                    horizontal=True,
+                    key="vt_mode"
+                )
+                
+                st.divider()
+                
+                if vt_mode == "📄 Single File":
+                    st.subheader("Scan Single File")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        file_input_method = st.radio(
+                            "File source:",
+                            ["Upload File", "File Path"],
+                            key="file_input_method"
+                        )
+                    
+                    if file_input_method == "Upload File":
+                        uploaded_vt = st.file_uploader(
+                            "Choose a file to scan",
+                            key="vt_file_upload"
+                        )
+                        
+                        if uploaded_vt and st.button("🔍 Scan Uploaded File", key="upload_scan_btn"):
+                            with st.spinner("Analyzing file with VirusTotal..."):
+                                temp_path = f"temp_{uploaded_vt.name}"
+                                with open(temp_path, "wb") as f:
+                                    f.write(uploaded_vt.getbuffer())
+                                
+                                try:
+                                    file_hash = FileHandler.calculate_sha256(temp_path)
+                                    vt_result = vt_api.get_file_status(file_hash)
+                                    
+                                    st.subheader("VirusTotal Scan Results")
+                                    
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        status = vt_result.get('status', 'UNKNOWN')
+                                        if status == 'INFECTED':
+                                            st.error(f"**Status**: {status}")
+                                        elif status == 'CLEAN':
+                                            st.success(f"**Status**: {status}")
+                                        else:
+                                            st.info(f"**Status**: {status}")
+                                    
+                                    with col2:
+                                        st.metric("Malicious", vt_result.get('malicious', '-'))
+                                    
+                                    with col3:
+                                        st.metric("Suspicious", vt_result.get('suspicious', '-'))
+                                    
+                                    st.divider()
+                                    
+                                    # Full hash
+                                    st.text_area("SHA256 Hash:", value=file_hash, disabled=True, height=60)
+                                    
+                                    # Detailed results
+                                    st.json({
+                                        'status': vt_result.get('status'),
+                                        'malicious': vt_result.get('malicious'),
+                                        'suspicious': vt_result.get('suspicious'),
+                                        'undetected': vt_result.get('undetected'),
+                                        'harmless': vt_result.get('harmless')
+                                    })
+                                    
+                                    # Store for combined analysis
+                                    st.session_state.vt_result = {
+                                        'file_name': uploaded_vt.name,
+                                        'hash': file_hash,
+                                        'status': vt_result.get('status'),
+                                        'malicious': vt_result.get('malicious'),
+                                        'suspicious': vt_result.get('suspicious')
+                                    }
+                                    
+                                finally:
+                                    if os.path.exists(temp_path):
+                                        os.remove(temp_path)
+                    
+                    else:  # File Path
+                        file_path = st.text_input(
+                            "Enter file path",
+                            placeholder="C:\\path\\to\\file.exe",
+                            key="vt_file_path"
+                        )
+                        
+                        if file_path and st.button("🔍 Scan File", key="path_scan_btn"):
+                            if not os.path.isfile(file_path):
+                                st.error(f"File not found: {file_path}")
+                            else:
+                                with st.spinner("Analyzing file with VirusTotal..."):
+                                    try:
+                                        file_hash = FileHandler.calculate_sha256(file_path)
+                                        vt_result = vt_api.get_file_status(file_hash)
+                                        
+                                        st.subheader("VirusTotal Scan Results")
+                                        
+                                        col1, col2, col3 = st.columns(3)
+                                        with col1:
+                                            status = vt_result.get('status', 'UNKNOWN')
+                                            if status == 'INFECTED':
+                                                st.error(f"**Status**: {status}")
+                                            elif status == 'CLEAN':
+                                                st.success(f"**Status**: {status}")
+                                            else:
+                                                st.info(f"**Status**: {status}")
+                                        
+                                        with col2:
+                                            st.metric("Malicious", vt_result.get('malicious', '-'))
+                                        
+                                        with col3:
+                                            st.metric("Suspicious", vt_result.get('suspicious', '-'))
+                                        
+                                        st.divider()
+                                        
+                                        st.text_area("SHA256 Hash:", value=file_hash, disabled=True, height=60)
+                                        
+                                        st.json({
+                                            'status': vt_result.get('status'),
+                                            'malicious': vt_result.get('malicious'),
+                                            'suspicious': vt_result.get('suspicious'),
+                                            'undetected': vt_result.get('undetected'),
+                                            'harmless': vt_result.get('harmless')
+                                        })
+                                        
+                                        st.session_state.vt_result = {
+                                            'file_name': Path(file_path).name,
+                                            'hash': file_hash,
+                                            'status': vt_result.get('status'),
+                                            'malicious': vt_result.get('malicious'),
+                                            'suspicious': vt_result.get('suspicious')
+                                        }
+                                        
+                                    except Exception as e:
+                                        st.error(f"Error scanning file: {str(e)}")
+                
+                else:  # Folder Scan
+                    st.subheader("Scan Folder for Malware")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        folder_path = st.text_input(
+                            "Enter folder path",
+                            placeholder="C:\\Users\\Desktop\\suspicious",
+                            key="folder_path_input"
+                        )
+                        recursive = st.checkbox("Scan recursively", value=True, key="recursive_scan")
+                    
+                    with col2:
+                        st.markdown("**Options:**")
+                        save_log = st.checkbox("Save results to log file", value=True, key="save_log_check")
+                        
+                        if save_log:
+                            log_file_path = st.text_input(
+                                "Log file path (optional)",
+                                placeholder="C:\\Desktop\\vt_results.log",
+                                key="log_file_input"
+                            )
+                        else:
+                            log_file_path = None
+                    
+                    if st.button("🚀 Start Folder Scan", key="folder_scan_btn"):
+                        if not folder_path:
+                            st.error("Please enter a folder path")
+                        elif not os.path.isdir(folder_path):
+                            st.error(f"Folder not found: {folder_path}")
+                        else:
+                            st.session_state.scan_results = []
+                            
+                            with st.spinner("Scanning files..."):
+                                files = FileHandler.get_files_from_directory(folder_path, recursive)
+                                
+                                if not files:
+                                    st.warning("No files found in the specified folder")
+                                else:
+                                    progress_bar = st.progress(0)
+                                    status_placeholder = st.empty()
+                                    results_placeholder = st.empty()
+                                    
+                                    results = []
+                                    
+                                    for idx, file_path in enumerate(files):
+                                        try:
+                                            file_hash = FileHandler.calculate_sha256(file_path)
+                                            vt_result = vt_api.get_file_status(file_hash)
+                                            
+                                            formatted_result = FileHandler.format_file_info(
+                                                file_path, file_hash, vt_result
+                                            )
+                                            
+                                            result_dict = {
+                                                'file': Path(file_path).name,
+                                                'path': file_path,
+                                                'hash': file_hash[:16] + "...",
+                                                'status': vt_result['status'],
+                                                'malicious': vt_result.get('malicious', '-'),
+                                                'suspicious': vt_result.get('suspicious', '-'),
+                                                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                            }
+                                            
+                                            results.append(result_dict)
+                                            st.session_state.scan_results.append(formatted_result)
+                                            
+                                            progress = (idx + 1) / len(files)
+                                            progress_bar.progress(progress)
+                                            status_placeholder.text(f"Scanning: {idx + 1}/{len(files)} files")
+                                            
+                                            with results_placeholder.container():
+                                                df_results = pd.DataFrame(results)
+                                                st.dataframe(df_results, use_container_width=True)
+                                        
+                                        except Exception as e:
+                                            st.warning(f"Error scanning {file_path}: {str(e)}")
+                                    
+                                    if save_log and log_file_path:
+                                        try:
+                                            os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+                                            with open(log_file_path, 'w') as f:
+                                                for result in st.session_state.scan_results:
+                                                    f.write(result + "\n")
+                                            st.success(f"✅ Results saved to {log_file_path}")
+                                        except Exception as e:
+                                            st.error(f"Error saving log file: {str(e)}")
+                                    
+                                    st.success(f"✅ Scan complete! Scanned {len(files)} files")
+        else:
+            st.error("VirusTotal API not configured. Please add your API key to the `.env` file.")
+    
+    # PAGE 3: Combined Analysis
+    elif page == "🎯 Combined Analysis":
+        st.subheader("🎯 Combined Analysis")
+        st.markdown(
+            "Compare results from both the Static Ransomware Detector and VirusTotal Scanner "
+            "for comprehensive file analysis."
+        )
+        
         st.divider()
-        st.write("Extracted features")
-        st.dataframe(df.T.rename(columns={0: "value"}))
-    except Exception as exc:  # pylint: disable=broad-except
-        st.error(f"Failed to score file: {exc}")
-    finally:
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-    st.caption("This tool performs static analysis only; results are for triage, not certification.")
+        
+        has_ransomware = hasattr(st.session_state, 'ransomware_result') and st.session_state.ransomware_result
+        has_vt = hasattr(st.session_state, 'vt_result') and st.session_state.vt_result
+        
+        if not (has_ransomware and has_vt):
+            st.info(
+                "👆 Run scans in both the **Ransomware Detector** and **VirusTotal Scanner** pages "
+                "to see a combined analysis here."
+            )
+        else:
+            rd = st.session_state.ransomware_result
+            vt = st.session_state.vt_result
+            
+            st.subheader("📊 Side-by-Side Comparison")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("### 🔬 Static Ransomware Detector")
+                st.markdown(f"**File**: {rd.get('file_name', 'N/A')}")
+                st.markdown(f"**Prediction**: `{rd.get('prediction', 'N/A')}`")
+                if rd.get('confidence'):
+                    st.markdown(f"**Confidence**: `{rd.get('confidence'):.2%}`")
+                st.text_area("MD5 Hash:", value=rd.get('md5', ''), disabled=True, height=60, key="rd_hash")
+            
+            with col2:
+                st.markdown("### 🔍 VirusTotal Scanner")
+                st.markdown(f"**File**: {vt.get('file_name', 'N/A')}")
+                st.markdown(f"**Status**: `{vt.get('status', 'N/A')}`")
+                st.markdown(f"**Malicious**: `{vt.get('malicious', '-')}`")
+                st.markdown(f"**Suspicious**: `{vt.get('suspicious', '-')}`")
+                st.text_area("SHA256 Hash:", value=vt.get('hash', ''), disabled=True, height=60, key="vt_hash")
+            
+            st.divider()
+            
+            # Risk Assessment
+            st.subheader("⚠️ Risk Assessment")
+            
+            static_risk = "HIGH" if rd.get('prediction') == "Ransomware" else "LOW"
+            vt_risk = "HIGH" if vt.get('status') == "INFECTED" else ("MEDIUM" if vt.get('malicious', 0) > 0 else "LOW")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Static Analysis Risk", static_risk)
+            
+            with col2:
+                st.metric("VirusTotal Risk", vt_risk)
+            
+            with col3:
+                overall_risk = "HIGH" if (static_risk == "HIGH" or vt_risk == "HIGH") else "MEDIUM" if vt_risk == "MEDIUM" else "LOW"
+                st.metric("Overall Risk", overall_risk)
+            
+            st.divider()
+            
+            # Summary
+            st.subheader("📝 Analysis Summary")
+            
+            summary = f"""
+            **File**: {rd.get('file_name', 'Unknown')}
+            
+            **Static Analysis Results**:
+            - Prediction: {rd.get('prediction', 'N/A')}
+            - Confidence: {f"{rd.get('confidence'):.2%}" if rd.get('confidence') else 'N/A'}
+            - Method: ML-based static PE header analysis
+            
+            **VirusTotal Results**:
+            - Status: {vt.get('status', 'N/A')}
+            - Malicious Detections: {vt.get('malicious', '-')}
+            - Suspicious Detections: {vt.get('suspicious', '-')}
+            - Method: Cloud-based threat intelligence database
+            
+            **Recommendation**:
+            """
+            
+            if static_risk == "HIGH" and vt_risk == "HIGH":
+                summary += "🚨 **CRITICAL**: Both methods flagged this file as suspicious. Do NOT execute."
+            elif static_risk == "HIGH" or vt_risk == "HIGH":
+                summary += "⚠️ **WARNING**: At least one detection method flagged this file. Use caution and isolate for further analysis."
+            else:
+                summary += "✅ **LOW RISK**: Both methods indicate this file appears to be benign. However, perform additional testing as needed."
+            
+            st.markdown(summary)
+    
+    # PAGE 4: Results Summary
+    elif page == "📊 Results":
+        st.subheader("📊 Scan Results Summary")
+        
+        if not st.session_state.scan_results:
+            st.info("No scan results yet. Run a VirusTotal folder scan to see results here.")
+        else:
+            st.text(f"Total files scanned: {len(st.session_state.scan_results)}")
+            
+            st.subheader("Results Log")
+            results_text = "\n".join(st.session_state.scan_results)
+            st.text_area("Scan Results:", value=results_text, height=400, disabled=True, key="results_textarea")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="📥 Download Results as TXT",
+                    data=results_text,
+                    file_name=f"vt_scan_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain"
+                )
+            
+            with col2:
+                if st.button("🗑️ Clear Results", key="clear_results_btn"):
+                    st.session_state.scan_results = []
+                    st.rerun()
+    
+    st.divider()
+    st.caption(
+        "⚠️ This tool is for security analysis and research only. "
+        "Results are for triage; not a substitute for professional security assessment. "
+        "Always follow proper malware handling procedures."
+    )
 
 
 if __name__ == "__main__":
