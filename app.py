@@ -120,7 +120,7 @@ def main():
         st.sidebar.markdown("---")
         page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "📈 Entropy Monitor"])
     else:
-        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "📈 Entropy Monitor", "🔍 VirusTotal Scanner", "🎯 Combined Analysis", "📊 Results"])
+        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "📈 Entropy Monitor", "🔍 VirusTotal Scanner"])
     
     # Main title
     st.title("🛡️ Ransomware Detection & VirusTotal Scanner")
@@ -471,127 +471,7 @@ def main():
         else:
             st.error("VirusTotal API not configured. Please add your API key to the `.env` file.")
     
-    # PAGE 3: Combined Analysis
-    elif page == "🎯 Combined Analysis":
-        st.subheader("🎯 Combined Analysis")
-        st.markdown(
-            "Compare results from both the Static Ransomware Detector and VirusTotal Scanner "
-            "for comprehensive file analysis."
-        )
-        
-        st.divider()
-        
-        has_ransomware = hasattr(st.session_state, 'ransomware_result') and st.session_state.ransomware_result
-        has_vt = hasattr(st.session_state, 'vt_result') and st.session_state.vt_result
-        
-        if not (has_ransomware and has_vt):
-            st.info(
-                "👆 Run scans in both the **Ransomware Detector** and **VirusTotal Scanner** pages "
-                "to see a combined analysis here."
-            )
-        else:
-            rd = st.session_state.ransomware_result
-            vt = st.session_state.vt_result
-            
-            st.subheader("📊 Side-by-Side Comparison")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("### 🔬 Static Ransomware Detector")
-                st.markdown(f"**File**: {rd.get('file_name', 'N/A')}")
-                st.markdown(f"**Prediction**: `{rd.get('prediction', 'N/A')}`")
-                if rd.get('confidence'):
-                    st.markdown(f"**Confidence**: `{rd.get('confidence'):.2%}`")
-                st.text_area("MD5 Hash:", value=rd.get('md5', ''), disabled=True, height=60, key="rd_hash")
-            
-            with col2:
-                st.markdown("### 🔍 VirusTotal Scanner")
-                st.markdown(f"**File**: {vt.get('file_name', 'N/A')}")
-                st.markdown(f"**Status**: `{vt.get('status', 'N/A')}`")
-                st.markdown(f"**Malicious**: `{vt.get('malicious', '-')}`")
-                st.markdown(f"**Suspicious**: `{vt.get('suspicious', '-')}`")
-                st.text_area("SHA256 Hash:", value=vt.get('hash', ''), disabled=True, height=60, key="vt_hash")
-            
-            st.divider()
-            
-            # Risk Assessment
-            st.subheader("⚠️ Risk Assessment")
-            
-            static_risk = "HIGH" if rd.get('prediction') == "Ransomware" else "LOW"
-            vt_risk = "HIGH" if vt.get('status') == "INFECTED" else ("MEDIUM" if vt.get('malicious', 0) > 0 else "LOW")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Static Analysis Risk", static_risk)
-            
-            with col2:
-                st.metric("VirusTotal Risk", vt_risk)
-            
-            with col3:
-                overall_risk = "HIGH" if (static_risk == "HIGH" or vt_risk == "HIGH") else "MEDIUM" if vt_risk == "MEDIUM" else "LOW"
-                st.metric("Overall Risk", overall_risk)
-            
-            st.divider()
-            
-            # Summary
-            st.subheader("📝 Analysis Summary")
-            
-            summary = f"""
-            **File**: {rd.get('file_name', 'Unknown')}
-            
-            **Static Analysis Results**:
-            - Prediction: {rd.get('prediction', 'N/A')}
-            - Confidence: {f"{rd.get('confidence'):.2%}" if rd.get('confidence') else 'N/A'}
-            - Method: ML-based static PE header analysis
-            
-            **VirusTotal Results**:
-            - Status: {vt.get('status', 'N/A')}
-            - Malicious Detections: {vt.get('malicious', '-')}
-            - Suspicious Detections: {vt.get('suspicious', '-')}
-            - Method: Cloud-based threat intelligence database
-            
-            **Recommendation**:
-            """
-            
-            if static_risk == "HIGH" and vt_risk == "HIGH":
-                summary += "🚨 **CRITICAL**: Both methods flagged this file as suspicious. Do NOT execute."
-            elif static_risk == "HIGH" or vt_risk == "HIGH":
-                summary += "⚠️ **WARNING**: At least one detection method flagged this file. Use caution and isolate for further analysis."
-            else:
-                summary += "✅ **LOW RISK**: Both methods indicate this file appears to be benign. However, perform additional testing as needed."
-            
-            st.markdown(summary)
-    
-    # PAGE 4: Results Summary
-    elif page == "📊 Results":
-        st.subheader("📊 Scan Results Summary")
-        
-        if not st.session_state.scan_results:
-            st.info("No scan results yet. Run a VirusTotal folder scan to see results here.")
-        else:
-            st.text(f"Total files scanned: {len(st.session_state.scan_results)}")
-            
-            st.subheader("Results Log")
-            results_text = "\n".join(st.session_state.scan_results)
-            st.text_area("Scan Results:", value=results_text, height=400, disabled=True, key="results_textarea")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    label="📥 Download Results as TXT",
-                    data=results_text,
-                    file_name=f"vt_scan_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                    mime="text/plain"
-                )
-            
-            with col2:
-                if st.button("🗑️ Clear Results", key="clear_results_btn"):
-                    st.session_state.scan_results = []
-                    st.rerun()
-    
-    # PAGE 5: Entropy Monitor
+    # PAGE 3: Entropy Monitor
     elif page == "📈 Entropy Monitor":
         st.subheader("📈 Real-time Entropy Monitor")
         st.markdown("Monitor file system entropy to detect encryption and suspicious file modifications.")
@@ -749,7 +629,7 @@ def main():
         
         with col_right:
             # Tabs for different views
-            tab1, tab2, tab3 = st.tabs(["📊 Current Session", "📋 Real-time Alerts", "📂 Previous Sessions"])
+            tab1, tab2 = st.tabs(["📊 Current Session", "📂 Previous Sessions"])
             
             with tab1:
                 st.markdown("### Monitored Files (Current Session)")
@@ -790,33 +670,6 @@ def main():
                     st.info("ℹ️ Start monitoring to begin tracking files.")
             
             with tab2:
-                st.markdown("### Real-time Alerts")
-                
-                if st.session_state.entropy_log:
-                    log_text = "\n".join(st.session_state.entropy_log[-100:])  # Show last 100 lines
-                    st.text_area("Alert Log:", value=log_text, height=350, disabled=True, key="entropy_logs_display")
-                    
-                    # Download logs
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        full_log = "\n".join(st.session_state.entropy_log)
-                        st.download_button(
-                            label="📥 Download Alerts",
-                            data=full_log,
-                            file_name=f"entropy_alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                            mime="text/plain",
-                            key="entropy_download",
-                            width='stretch'
-                        )
-                    
-                    with col2:
-                        if st.button("🗑️ Clear Alerts", key="entropy_clear", width='stretch'):
-                            st.session_state.entropy_log = []
-                            st.rerun()
-                else:
-                    st.info("ℹ️ No alerts yet. Alerts will appear here when suspicious entropy is detected.")
-            
-            with tab3:
                 st.markdown("### Previous Monitoring Sessions")
                 
                 # List all available sessions
