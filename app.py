@@ -96,17 +96,9 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Auto-refresh for entropy monitoring page only
-    if 'entropy_monitoring' in st.session_state and st.session_state.entropy_monitoring:
-        import time
-        # Add a rerun trigger every 3 seconds
-        if 'last_update' not in st.session_state:
-            st.session_state.last_update = time.time()
-        
-        current_time = time.time()
-        if current_time - st.session_state.last_update > 3:
-            st.session_state.last_update = current_time
-            st.rerun()
+    # Initialize auto-refresh timer
+    if 'last_update' not in st.session_state:
+        st.session_state.last_update = 0
     
     init_session_state()
     
@@ -644,8 +636,8 @@ def main():
                         entropy_monitor.stop_monitoring()
                         st.session_state.entropy_observer = None
                         st.session_state.entropy_monitoring = False
-                        st.info("⏸️ Monitoring stopped")
-                        st.rerun()
+                        st.session_state.entropy_session_id = None
+                        st.success("⏹️ Monitoring stopped")
                     except Exception as e:
                         st.error(f"Error stopping monitor: {str(e)}")
                 else:
@@ -667,7 +659,6 @@ def main():
                                 st.session_state.entropy_observer = observer
                                 st.session_state.entropy_monitoring = True
                                 st.success(f"✅ Monitoring started (Session: {session_id})")
-                                st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Error starting monitor: {str(e)}")
                         else:
@@ -762,19 +753,6 @@ def main():
             
             with tab1:
                 st.markdown("### Monitored Files (Current Session)")
-                
-                # Auto-refresh every 3 seconds when monitoring is active
-                if st.session_state.entropy_monitoring:
-                    import time
-                    # Initialize last refresh time
-                    if 'last_refresh_time' not in st.session_state:
-                        st.session_state.last_refresh_time = time.time()
-                    
-                    # Check if 3 seconds have passed
-                    current_time = time.time()
-                    if current_time - st.session_state.last_refresh_time >= 3:
-                        st.session_state.last_refresh_time = current_time
-                        st.rerun()
                 
                 if st.session_state.entropy_session_id:
                     session_file = Path(f"entropy_sessions/session_{st.session_state.entropy_session_id}.json")
@@ -892,6 +870,15 @@ def main():
                                     st.error(f"Error loading session: {str(e)}")
                 else:
                     st.info("ℹ️ No previous sessions found. Start monitoring to create a new session.")
+        
+        # Auto-refresh when monitoring is active
+        if st.session_state.entropy_monitoring:
+            import time
+            current_time = time.time()
+            if current_time - st.session_state.last_update >= 3:
+                st.session_state.last_update = current_time
+                time.sleep(0.1)  # Small delay to ensure data is written
+                st.rerun()
     
     st.divider()
     st.caption(
