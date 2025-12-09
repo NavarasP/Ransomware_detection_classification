@@ -305,6 +305,30 @@ def start_monitoring(watch_paths: list, callback: Optional[Callable] = None, ses
     obs.start()
     observer_instance = obs
     
+    # Scan existing files to populate initial baseline
+    def scan_existing_files():
+        for watch_path in watch_paths:
+            try:
+                for root, dirs, files in os.walk(watch_path):
+                    # Skip excluded directories
+                    dirs[:] = [d for d in dirs if not any(str(Path(root) / d).startswith(excl) for excl in EXCLUDE_DIRS)]
+                    
+                    for file in files:
+                        file_path = Path(root) / file
+                        # Skip excluded extensions
+                        if file_path.suffix.lower() not in EXCLUDE_EXT:
+                            try:
+                                process_file(str(file_path))
+                            except:
+                                pass
+            except:
+                pass
+    
+    # Run initial scan in background thread
+    import threading
+    scan_thread = threading.Thread(target=scan_existing_files, daemon=True)
+    scan_thread.start()
+    
     return obs
 
 
