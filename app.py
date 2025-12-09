@@ -221,7 +221,7 @@ def main():
                 
                 # Features table
                 with st.expander("📊 Extracted Features", expanded=False):
-                    st.dataframe(df.T.rename(columns={0: "value"}), use_container_width=True)
+                    st.dataframe(df.T.rename(columns={0: "value"}), width='stretch')
                 
             except Exception as exc:
                 st.error(f"Failed to analyze file: {exc}")
@@ -460,7 +460,7 @@ def main():
                                             
                                             with results_placeholder.container():
                                                 df_results = pd.DataFrame(results)
-                                                st.dataframe(df_results, use_container_width=True)
+                                                st.dataframe(df_results, width='stretch')
                                         
                                         except Exception as e:
                                             st.warning(f"Error scanning {file_path}: {str(e)}")
@@ -637,7 +637,7 @@ def main():
                 button_label = "▶️ Start Monitoring"
                 button_key = "entropy_toggle_btn"
             
-            if st.button(button_label, key=button_key, use_container_width=True):
+            if st.button(button_label, key=button_key, width='stretch'):
                 if st.session_state.entropy_monitoring:
                     # Stop monitoring
                     try:
@@ -687,7 +687,7 @@ def main():
             
             with status_col2:
                 if st.session_state.entropy_monitoring:
-                    if st.button("🔄 Refresh", key="manual_refresh", use_container_width=True):
+                    if st.button("🔄 Refresh", key="manual_refresh", width='stretch'):
                         st.rerun()
             
             # Show last update time
@@ -747,7 +747,7 @@ def main():
                                 showlegend=False,
                                 margin=dict(l=40, r=40, t=40, b=40)
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width='stretch')
                             
                             # Download baseline for current session
                             st.download_button(
@@ -755,7 +755,7 @@ def main():
                                 data=json.dumps(session_data, indent=2),
                                 file_name=f"entropy_session_{st.session_state.entropy_session_id}.json",
                                 mime="application/json",
-                                use_container_width=True
+                                width='stretch'
                             )
                         else:
                             st.info("ℹ️ No data collected yet. Files will appear as they're modified.")
@@ -809,7 +809,7 @@ def main():
                                 df = pd.DataFrame(files_data).sort_values('Entropy', ascending=False)
                                 # Show subset with most important columns
                                 display_df = df[['File', 'Entropy', 'Status']].copy()
-                                st.dataframe(display_df, use_container_width=True, height=400)
+                                st.dataframe(display_df, width='stretch', height=400)
                                 
                                 st.caption(f"📊 {len(files_data)} files • Auto-refreshing every 3s")
                             else:
@@ -838,11 +838,11 @@ def main():
                             file_name=f"entropy_alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                             mime="text/plain",
                             key="entropy_download",
-                            use_container_width=True
+                            width='stretch'
                         )
                     
                     with col2:
-                        if st.button("🗑️ Clear Alerts", key="entropy_clear", use_container_width=True):
+                        if st.button("🗑️ Clear Alerts", key="entropy_clear", width='stretch'):
                             st.session_state.entropy_log = []
                             st.rerun()
                 else:
@@ -888,7 +888,7 @@ def main():
                                             })
                                         
                                         df = pd.DataFrame(files_data).sort_values('Entropy', ascending=False)
-                                        st.dataframe(df, use_container_width=True, height=200)
+                                        st.dataframe(df, width='stretch', height=200)
                                         
                                         # Download button
                                         st.download_button(
