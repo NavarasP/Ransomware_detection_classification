@@ -678,21 +678,11 @@ def main():
             st.divider()
             
             # Display monitoring status
-            status_col1, status_col2 = st.columns([2, 1])
-            with status_col1:
-                if st.session_state.entropy_monitoring:
-                    st.success("🟢 Monitoring Active")
-                else:
-                    st.info("🔴 Monitoring Inactive")
-            
-            with status_col2:
-                if st.session_state.entropy_monitoring:
-                    if st.button("🔄 Refresh", key="manual_refresh", width='stretch'):
-                        st.rerun()
-            
-            # Show last update time
             if st.session_state.entropy_monitoring:
+                st.success("🟢 Monitoring Active")
                 st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')}")
+            else:
+                st.info("🔴 Monitoring Inactive")
             
             st.divider()
             
