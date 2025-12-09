@@ -4,6 +4,9 @@ from typing import TYPE_CHECKING, Any, Protocol, Sequence, Tuple, runtime_checka
 import json
 import tempfile
 import os
+import subprocess
+import threading
+import queue
 from pathlib import Path
 from datetime import datetime
 
@@ -11,6 +14,7 @@ import joblib
 import pandas as pd
 import streamlit as st
 
+import entropy_monitor
 from feature_extractor import FEATURE_COLUMNS, compute_md5, extract_features
 from file_handler import FileHandler
 from virustotal import VirusTotalAPI
@@ -92,6 +96,17 @@ def main():
         initial_sidebar_state="expanded"
     )
     
+    # Auto-refresh the page every 2 seconds when monitoring is active
+    if 'entropy_monitoring' in st.session_state and st.session_state.entropy_monitoring:
+        # Use JavaScript to auto-refresh
+        st.write("""
+        <script>
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+        </script>
+        """, unsafe_allow_html=True)
+    
     init_session_state()
     
     # Check for VirusTotal API key
@@ -110,9 +125,9 @@ def main():
             "Get your free API key from https://www.virustotal.com/"
         )
         st.sidebar.markdown("---")
-        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector"])
+        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "📈 Entropy Monitor"])
     else:
-        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "🔍 VirusTotal Scanner", "🎯 Combined Analysis", "📊 Results"])
+        page = st.sidebar.radio("Navigation", ["🔬 Ransomware Detector", "📈 Entropy Monitor", "🔍 VirusTotal Scanner", "🎯 Combined Analysis", "📊 Results"])
     
     # Main title
     st.title("🛡️ Ransomware Detection & VirusTotal Scanner")
@@ -582,6 +597,210 @@ def main():
                 if st.button("🗑️ Clear Results", key="clear_results_btn"):
                     st.session_state.scan_results = []
                     st.rerun()
+    
+    # PAGE 5: Entropy Monitor
+    elif page == "📈 Entropy Monitor":
+        st.subheader("📈 Real-time Entropy Monitor")
+        st.markdown("Monitor file system entropy to detect encryption and suspicious file modifications.")
+        
+        st.divider()
+        
+        # Initialize monitoring state
+        if 'entropy_observer' not in st.session_state:
+            st.session_state.entropy_observer = None
+        if 'entropy_monitoring' not in st.session_state:
+            st.session_state.entropy_monitoring = False
+        if 'entropy_log' not in st.session_state:
+            st.session_state.entropy_log = []
+        
+        col_left, col_right = st.columns([1, 1.5])
+        
+        with col_left:
+            st.markdown("### Configuration")
+            
+            monitor_path = st.text_input(
+                "Folder path",
+                placeholder="C:\\Users\\YourUser\\Documents",
+                key="entropy_path_input"
+            )
+            
+            # Single button that toggles monitoring
+            if st.session_state.entropy_monitoring:
+                button_label = "⏹️ Stop Monitoring"
+                button_key = "entropy_toggle_btn"
+            else:
+                button_label = "▶️ Start Monitoring"
+                button_key = "entropy_toggle_btn"
+            
+            if st.button(button_label, key=button_key, use_container_width=True):
+                if st.session_state.entropy_monitoring:
+                    # Stop monitoring
+                    try:
+                        entropy_monitor.stop_monitoring()
+                        st.session_state.entropy_observer = None
+                        st.session_state.entropy_monitoring = False
+                        st.info("⏸️ Monitoring stopped")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error stopping monitor: {str(e)}")
+                else:
+                    # Start monitoring
+                    if monitor_path:
+                        if os.path.isdir(monitor_path):
+                            try:
+                                def alert_callback(msg: str):
+                                    st.session_state.entropy_log.append(msg)
+                                
+                                # Start entropy monitor in background thread
+                                observer = entropy_monitor.start_monitoring([monitor_path], alert_callback)
+                                st.session_state.entropy_observer = observer
+                                st.session_state.entropy_monitoring = True
+                                st.success(f"✅ Monitoring started")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Error starting monitor: {str(e)}")
+                        else:
+                            st.error(f"❌ Folder not found: {monitor_path}")
+                    else:
+                        st.warning("⚠️ Please enter a folder path")
+            
+            st.divider()
+            
+            # Display monitoring status
+            if st.session_state.entropy_monitoring:
+                st.success("🟢 Monitoring Active")
+            else:
+                st.info("🔴 Monitoring Inactive")
+            
+            st.divider()
+            
+            # Load and display baseline data (refreshes every page render)
+            baseline_file = Path("entropy_baseline.json")
+            if baseline_file.exists():
+                try:
+                    with open(baseline_file, 'r') as f:
+                        baseline_data = json.load(f)
+                    
+                    st.markdown("### Baseline Stats")
+                    
+                    if baseline_data:
+                        # Statistics
+                        entropy_values = [e for e in baseline_data.values() if isinstance(e, (int, float))]
+                        
+                        col_stat1, col_stat2 = st.columns(2)
+                        with col_stat1:
+                            st.metric("Files Monitored", len(baseline_data))
+                        with col_stat2:
+                            if entropy_values:
+                                st.metric("Avg Entropy", f"{sum(entropy_values)/len(entropy_values):.3f}")
+                        
+                        if entropy_values:
+                            st.metric("Max Entropy", f"{max(entropy_values):.3f}")
+                        
+                        # Graphical representation - Entropy distribution
+                        import plotly.graph_objects as go
+                        import plotly.express as px
+                        
+                        entropy_vals = sorted([e for e in baseline_data.values() if isinstance(e, (int, float))])
+                        
+                        fig = go.Figure()
+                        fig.add_trace(go.Histogram(
+                            x=entropy_vals,
+                            nbinsx=15,
+                            name='Entropy Distribution',
+                            marker_color='#1f77b4'
+                        ))
+                        fig.add_vline(x=sum(entropy_vals)/len(entropy_vals) if entropy_vals else 0, 
+                                     line_dash="dash", line_color="green", 
+                                     annotation_text="Avg", annotation_position="top right")
+                        fig.add_vline(x=7.2, 
+                                     line_dash="dash", line_color="red", 
+                                     annotation_text="Alert Threshold", annotation_position="top")
+                        fig.update_layout(
+                            title="Entropy Distribution",
+                            xaxis_title="Entropy Value",
+                            yaxis_title="File Count",
+                            height=300,
+                            showlegend=False,
+                            margin=dict(l=40, r=40, t=40, b=40)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Download baseline
+                        st.download_button(
+                            label="📥 Download Baseline",
+                            data=json.dumps(baseline_data, indent=2),
+                            file_name=f"entropy_baseline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json",
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("ℹ️ No baseline data yet.")
+                except Exception as e:
+                    st.error(f"Error reading baseline: {str(e)}")
+            else:
+                st.info("ℹ️ No baseline file found.")
+        
+        with col_right:
+            # Tabs for different views
+            tab1, tab2 = st.tabs(["📊 Files Monitored", "📋 Real-time Alerts"])
+            
+            with tab1:
+                st.markdown("### Monitored Files & Baseline")
+                baseline_file = Path("entropy_baseline.json")
+                if baseline_file.exists():
+                    try:
+                        with open(baseline_file, 'r') as f:
+                            baseline_data = json.load(f)
+                        
+                        if baseline_data:
+                            # Create dataframe for display
+                            files_data = []
+                            for file_path, entropy in baseline_data.items():
+                                files_data.append({
+                                    'File': Path(file_path).name,
+                                    'Path': file_path,
+                                    'Entropy': round(entropy, 4) if isinstance(entropy, (int, float)) else entropy,
+                                    'Status': '🔴 High' if entropy >= 7.2 else '🟢 Normal'
+                                })
+                            
+                            df = pd.DataFrame(files_data)
+                            # Show subset with most important columns
+                            display_df = df[['File', 'Entropy', 'Status']].copy()
+                            st.dataframe(display_df, use_container_width=True, height=400)
+                        else:
+                            st.info("ℹ️ No baseline data yet.")
+                    except Exception as e:
+                        st.error(f"Error reading baseline: {str(e)}")
+                else:
+                    st.info("ℹ️ No baseline file found.")
+            
+            with tab2:
+                st.markdown("### Real-time Alerts")
+                
+                if st.session_state.entropy_log:
+                    log_text = "\n".join(st.session_state.entropy_log[-100:])  # Show last 100 lines
+                    st.text_area("Alert Log:", value=log_text, height=350, disabled=True, key="entropy_logs_display")
+                    
+                    # Download logs
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        full_log = "\n".join(st.session_state.entropy_log)
+                        st.download_button(
+                            label="📥 Download Alerts",
+                            data=full_log,
+                            file_name=f"entropy_alerts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain",
+                            key="entropy_download",
+                            use_container_width=True
+                        )
+                    
+                    with col2:
+                        if st.button("🗑️ Clear Alerts", key="entropy_clear", use_container_width=True):
+                            st.session_state.entropy_log = []
+                            st.rerun()
+                else:
+                    st.info("ℹ️ No alerts yet. Alerts will appear here when suspicious entropy is detected.")
     
     st.divider()
     st.caption(

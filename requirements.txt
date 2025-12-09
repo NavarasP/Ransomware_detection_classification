@@ -8,3 +8,4 @@ kagglehub>=0.1.4
 click>=8.1
 requests>=2.31.0
 python-dotenv>=1.0.0
+watchdog>=3.0.0
