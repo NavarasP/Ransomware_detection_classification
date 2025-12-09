@@ -1,10 +1,10 @@
 {
   "files": {
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.058846537341609,
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json": 5.13403091836951,
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json": 5.0622879479530605,
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\app.py": 3.717959987049327,
-    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.056662830148541,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.072584551882263,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json": 5.126785557072731,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json": 5.067668209561246,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\app.py": 4.138385421116961,
+    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.055921375085934,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\72\\2cdb48cc805a8c47e776051f95c6e47054fd25": 6.683622003503991,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\ae\\e1e05f8730c33c0faf022d0d0b8b004720ae27": 7.980105992449102,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\d2\\f3667b9913bbae248a682bb1a73bbd4dd7258b": 7.412612055177856,
@@ -12,9 +12,9 @@
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\0a\\4edbcb3ccae4c8c573eea70811c70164f65cf4": 6.067999023791075,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\77\\bba3c067131c52d5193e992f517c501211e9af": 7.490105501217557,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\COMMIT_EDITMSG": 4.092677806769078,
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\refs\\heads\\main": 3.832446516496601,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\refs\\heads\\main": 3.732449797713433,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\logs\\refs\\heads\\main": 5.024237355250981,
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\logs\\HEAD": 4.955790403106931,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\logs\\HEAD": 4.973074422830533,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\57\\a574620ffa92be01b6aeb17653ef0fc63f3e84": 7.228647068713809,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json.tmp": 5.131241964467586,
     "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json.tmp": 5.128158623032601,
@@ -22,7 +22,13 @@
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\aa\\ca90243db95cbd5a193f00af02628ffa89f629": 7.693529678166197,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\7e\\b2fea6716a7a29e00ecafe2ca9c20636232308": 7.975974534003623,
     "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\08\\5156d751a78fa035e27a458a66af3280853cb1": 6.092412994336889,
-    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\97\\8f59dc2d637a191e404ae540d808b5aed71d2d": 7.478750340379776
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\97\\8f59dc2d637a191e404ae540d808b5aed71d2d": 7.478750340379776,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\6c\\906626666774aec4c4cfb84d18326a454c2654": 7.792526677700517,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\1a\\e90e11f2b068fabe4aae7a9e20b7679ce692ed": 7.975180978630978,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\a7\\dd1a67dfe9f891bb8ccb49a0fc6a3ce5e467a0": 6.0056016906871506,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\4e\\aaab5cfcfc1692754ae146f0d66fd1413f6b26": 7.523945663943164,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\objects\\21\\7e72adbe5fa34224b1e6c53badec425a3191c3": 6.959406950593007,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.git\\FETCH_HEAD": 4.945694861927132
   },
   "metadata": {
     "start_time": "2025-12-09T18:45:18.094117",
