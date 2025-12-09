@@ -1,0 +1,13 @@
+{
+  "files": {
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.0390349847446645,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184518.json": 5.124958675959181,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json": 4.994076579899581,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\app.py": 3.717959987049327,
+    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 0.0
+  },
+  "metadata": {
+    "start_time": "2025-12-09T18:45:18.094117",
+    "watch_path": "D:\\Projects\\buck"
+  }
+}

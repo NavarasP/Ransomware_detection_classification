@@ -96,16 +96,17 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Auto-refresh the page every 2 seconds when monitoring is active
+    # Auto-refresh for entropy monitoring page only
     if 'entropy_monitoring' in st.session_state and st.session_state.entropy_monitoring:
-        # Use JavaScript to auto-refresh
-        st.write("""
-        <script>
-        setTimeout(() => {
-            location.reload();
-        }, 2000);
-        </script>
-        """, unsafe_allow_html=True)
+        import time
+        # Add a rerun trigger every 3 seconds
+        if 'last_update' not in st.session_state:
+            st.session_state.last_update = time.time()
+        
+        current_time = time.time()
+        if current_time - st.session_state.last_update > 3:
+            st.session_state.last_update = current_time
+            st.rerun()
     
     init_session_state()
     
@@ -612,6 +613,10 @@ def main():
             st.session_state.entropy_monitoring = False
         if 'entropy_log' not in st.session_state:
             st.session_state.entropy_log = []
+        if 'entropy_current_path' not in st.session_state:
+            st.session_state.entropy_current_path = None
+        if 'entropy_session_id' not in st.session_state:
+            st.session_state.entropy_session_id = None
         
         col_left, col_right = st.columns([1, 1.5])
         
@@ -648,14 +653,20 @@ def main():
                     if monitor_path:
                         if os.path.isdir(monitor_path):
                             try:
+                                # Generate session ID
+                                session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+                                st.session_state.entropy_session_id = session_id
+                                st.session_state.entropy_log = []
+                                st.session_state.entropy_current_path = os.path.abspath(monitor_path)
+                                
                                 def alert_callback(msg: str):
                                     st.session_state.entropy_log.append(msg)
                                 
-                                # Start entropy monitor in background thread
-                                observer = entropy_monitor.start_monitoring([monitor_path], alert_callback)
+                                # Start entropy monitor with session ID
+                                observer = entropy_monitor.start_monitoring([monitor_path], alert_callback, session_id)
                                 st.session_state.entropy_observer = observer
                                 st.session_state.entropy_monitoring = True
-                                st.success(f"✅ Monitoring started")
+                                st.success(f"✅ Monitoring started (Session: {session_id})")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Error starting monitor: {str(e)}")
@@ -674,106 +685,114 @@ def main():
             
             st.divider()
             
-            # Load and display baseline data (refreshes every page render)
-            baseline_file = Path("entropy_baseline.json")
-            if baseline_file.exists():
-                try:
-                    with open(baseline_file, 'r') as f:
-                        baseline_data = json.load(f)
-                    
-                    st.markdown("### Baseline Stats")
-                    
-                    if baseline_data:
-                        # Statistics
-                        entropy_values = [e for e in baseline_data.values() if isinstance(e, (int, float))]
+            # Load and display baseline data for current session only
+            if st.session_state.entropy_session_id:
+                session_file = Path(f"entropy_sessions/session_{st.session_state.entropy_session_id}.json")
+                if session_file.exists():
+                    try:
+                        with open(session_file, 'r') as f:
+                            session_data_full = json.load(f)
                         
-                        col_stat1, col_stat2 = st.columns(2)
-                        with col_stat1:
-                            st.metric("Files Monitored", len(baseline_data))
-                        with col_stat2:
+                        session_data = session_data_full.get("files", {})
+                        st.markdown("### Baseline Stats")
+                        
+                        if session_data:
+                            # Statistics for current session
+                            entropy_values = [e for e in session_data.values() if isinstance(e, (int, float))]
+                            
+                            col_stat1, col_stat2 = st.columns(2)
+                            with col_stat1:
+                                st.metric("Files Monitored", len(session_data))
+                            with col_stat2:
+                                if entropy_values:
+                                    st.metric("Avg Entropy", f"{sum(entropy_values)/len(entropy_values):.3f}")
+                            
                             if entropy_values:
-                                st.metric("Avg Entropy", f"{sum(entropy_values)/len(entropy_values):.3f}")
-                        
-                        if entropy_values:
-                            st.metric("Max Entropy", f"{max(entropy_values):.3f}")
-                        
-                        # Graphical representation - Entropy distribution
-                        import plotly.graph_objects as go
-                        import plotly.express as px
-                        
-                        entropy_vals = sorted([e for e in baseline_data.values() if isinstance(e, (int, float))])
-                        
-                        fig = go.Figure()
-                        fig.add_trace(go.Histogram(
-                            x=entropy_vals,
-                            nbinsx=15,
-                            name='Entropy Distribution',
-                            marker_color='#1f77b4'
-                        ))
-                        fig.add_vline(x=sum(entropy_vals)/len(entropy_vals) if entropy_vals else 0, 
-                                     line_dash="dash", line_color="green", 
-                                     annotation_text="Avg", annotation_position="top right")
-                        fig.add_vline(x=7.2, 
-                                     line_dash="dash", line_color="red", 
-                                     annotation_text="Alert Threshold", annotation_position="top")
-                        fig.update_layout(
-                            title="Entropy Distribution",
-                            xaxis_title="Entropy Value",
-                            yaxis_title="File Count",
-                            height=300,
-                            showlegend=False,
-                            margin=dict(l=40, r=40, t=40, b=40)
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Download baseline
-                        st.download_button(
-                            label="📥 Download Baseline",
-                            data=json.dumps(baseline_data, indent=2),
-                            file_name=f"entropy_baseline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                            mime="application/json",
-                            use_container_width=True
-                        )
-                    else:
-                        st.info("ℹ️ No baseline data yet.")
-                except Exception as e:
-                    st.error(f"Error reading baseline: {str(e)}")
+                                st.metric("Max Entropy", f"{max(entropy_values):.3f}")
+                            
+                            # Graphical representation - Entropy distribution
+                            import plotly.graph_objects as go
+                            
+                            entropy_vals = sorted([e for e in session_data.values() if isinstance(e, (int, float))])
+                            
+                            fig = go.Figure()
+                            fig.add_trace(go.Histogram(
+                                x=entropy_vals,
+                                nbinsx=15,
+                                name='Entropy Distribution',
+                                marker_color='#1f77b4'
+                            ))
+                            fig.add_vline(x=sum(entropy_vals)/len(entropy_vals) if entropy_vals else 0, 
+                                         line_dash="dash", line_color="green", 
+                                         annotation_text="Avg", annotation_position="top right")
+                            fig.add_vline(x=7.2, 
+                                         line_dash="dash", line_color="red", 
+                                         annotation_text="Alert Threshold", annotation_position="top")
+                            fig.update_layout(
+                                title="Entropy Distribution (Current Session)",
+                                xaxis_title="Entropy Value",
+                                yaxis_title="File Count",
+                                height=300,
+                                showlegend=False,
+                                margin=dict(l=40, r=40, t=40, b=40)
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Download baseline for current session
+                            st.download_button(
+                                label="📥 Download Session Data",
+                                data=json.dumps(session_data, indent=2),
+                                file_name=f"entropy_session_{st.session_state.entropy_session_id}.json",
+                                mime="application/json",
+                                use_container_width=True
+                            )
+                        else:
+                            st.info("ℹ️ No data collected yet. Files will appear as they're modified.")
+                    except Exception as e:
+                        st.error(f"Error reading session data: {str(e)}")
+                else:
+                    st.info("ℹ️ Session data file not created yet.")
             else:
-                st.info("ℹ️ No baseline file found.")
+                st.info("ℹ️ Start monitoring to begin a new session.")
         
         with col_right:
             # Tabs for different views
-            tab1, tab2 = st.tabs(["📊 Files Monitored", "📋 Real-time Alerts"])
+            tab1, tab2, tab3 = st.tabs(["📊 Current Session", "📋 Real-time Alerts", "📂 Previous Sessions"])
             
             with tab1:
-                st.markdown("### Monitored Files & Baseline")
-                baseline_file = Path("entropy_baseline.json")
-                if baseline_file.exists():
-                    try:
-                        with open(baseline_file, 'r') as f:
-                            baseline_data = json.load(f)
-                        
-                        if baseline_data:
-                            # Create dataframe for display
-                            files_data = []
-                            for file_path, entropy in baseline_data.items():
-                                files_data.append({
-                                    'File': Path(file_path).name,
-                                    'Path': file_path,
-                                    'Entropy': round(entropy, 4) if isinstance(entropy, (int, float)) else entropy,
-                                    'Status': '🔴 High' if entropy >= 7.2 else '🟢 Normal'
-                                })
+                st.markdown("### Monitored Files (Current Session)")
+                if st.session_state.entropy_session_id:
+                    session_file = Path(f"entropy_sessions/session_{st.session_state.entropy_session_id}.json")
+                    if session_file.exists():
+                        try:
+                            with open(session_file, 'r') as f:
+                                session_data_full = json.load(f)
                             
-                            df = pd.DataFrame(files_data)
-                            # Show subset with most important columns
-                            display_df = df[['File', 'Entropy', 'Status']].copy()
-                            st.dataframe(display_df, use_container_width=True, height=400)
-                        else:
-                            st.info("ℹ️ No baseline data yet.")
-                    except Exception as e:
-                        st.error(f"Error reading baseline: {str(e)}")
+                            session_data = session_data_full.get("files", {})
+                            
+                            if session_data:
+                                # Create dataframe for display
+                                files_data = []
+                                for file_path, entropy in session_data.items():
+                                    files_data.append({
+                                        'File': Path(file_path).name,
+                                        'Path': file_path,
+                                        'Entropy': round(entropy, 4) if isinstance(entropy, (int, float)) else entropy,
+                                        'Status': '🔴 High' if entropy >= 7.2 else '🟢 Normal'
+                                    })
+                                
+                                df = pd.DataFrame(files_data).sort_values('Entropy', ascending=False)
+                                # Show subset with most important columns
+                                display_df = df[['File', 'Entropy', 'Status']].copy()
+                                st.dataframe(display_df, use_container_width=True, height=400)
+                            else:
+                                st.info("ℹ️ No files tracked yet. Files will appear as they're modified.")
+                        except Exception as e:
+                            st.error(f"Error reading session data: {str(e)}")
+                    else:
+                        st.info("ℹ️ Session data file not created yet.")
                 else:
-                    st.info("ℹ️ No baseline file found.")
+                    st.info("ℹ️ Start monitoring to begin tracking files.")
             
             with tab2:
                 st.markdown("### Real-time Alerts")
@@ -801,6 +820,61 @@ def main():
                             st.rerun()
                 else:
                     st.info("ℹ️ No alerts yet. Alerts will appear here when suspicious entropy is detected.")
+            
+            with tab3:
+                st.markdown("### Previous Monitoring Sessions")
+                
+                # List all available sessions
+                sessions = entropy_monitor.list_sessions()
+                
+                if sessions:
+                    for session in sessions:
+                        session_id = session["id"]
+                        metadata = session.get("metadata", {})
+                        file_count = session.get("file_count", 0)
+                        
+                        with st.expander(f"📁 Session {session_id} - {file_count} files"):
+                            col_a, col_b = st.columns(2)
+                            with col_a:
+                                st.write(f"**Start Time:** {metadata.get('start_time', 'N/A')}")
+                                st.write(f"**End Time:** {metadata.get('end_time', 'N/A')}")
+                            with col_b:
+                                st.write(f"**Path:** {metadata.get('watch_path', 'N/A')}")
+                                st.write(f"**Files:** {file_count}")
+                            
+                            # Show file data
+                            session_file = Path(f"entropy_sessions/session_{session_id}.json")
+                            if session_file.exists():
+                                try:
+                                    with open(session_file, 'r') as f:
+                                        session_data_full = json.load(f)
+                                    
+                                    session_files = session_data_full.get("files", {})
+                                    
+                                    if session_files:
+                                        files_data = []
+                                        for file_path, entropy in session_files.items():
+                                            files_data.append({
+                                                'File': Path(file_path).name,
+                                                'Entropy': round(entropy, 4),
+                                                'Status': '🔴 High' if entropy >= 7.2 else '🟢 Normal'
+                                            })
+                                        
+                                        df = pd.DataFrame(files_data).sort_values('Entropy', ascending=False)
+                                        st.dataframe(df, use_container_width=True, height=200)
+                                        
+                                        # Download button
+                                        st.download_button(
+                                            label="📥 Download Session",
+                                            data=json.dumps(session_data_full, indent=2),
+                                            file_name=f"session_{session_id}.json",
+                                            mime="application/json",
+                                            key=f"download_{session_id}"
+                                        )
+                                except Exception as e:
+                                    st.error(f"Error loading session: {str(e)}")
+                else:
+                    st.info("ℹ️ No previous sessions found. Start monitoring to create a new session.")
     
     st.divider()
     st.caption(

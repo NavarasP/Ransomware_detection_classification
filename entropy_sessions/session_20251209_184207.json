@@ -1,0 +1,16 @@
+{
+  "files": {
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.05910844596585,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_sessions\\session_20251209_184207.json": 5.166576544987022,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json": 5.0696460239582475,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.venv\\Lib\\site-packages\\streamlit\\static\\static\\js\\index.W-bl3NDo.js": 4.847992668123532,
+    "D:\\Projects\\buck\\Ransomware_detection_classification\\.venv\\Lib\\site-packages\\streamlit\\static\\static\\js\\index.DfIRibXG.js": 5.089713532521358,
+    "\\\\?\\D:\\Projects\\buck\\Ransomware_detection_classification\\entropy_baseline.json.tmp": 5.072636390429234,
+    "D:\\Projects\\buck\\New Text Document.txt": 3.577972954832899
+  },
+  "metadata": {
+    "start_time": "2025-12-09T18:42:07.018952",
+    "watch_path": "D:\\Projects\\buck",
+    "end_time": "2025-12-09T18:43:15.957602"
+  }
+}

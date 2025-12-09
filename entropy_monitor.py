@@ -19,6 +19,7 @@ ENTROPY_THRESHOLD = 7.2         # absolute entropy threshold
 ENTROPY_DELTA_THRESHOLD = 0.9  # increase vs baseline
 DEBOUNCE_SECONDS = 0.5         # coalesce repeated events
 BASELINE_FILE = "entropy_baseline.json"
+SESSIONS_DIR = "entropy_sessions"  # Directory to store session data
 EXCLUDE_EXT = {'.zip', '.rar', '.7z', '.gz', '.jpg', '.jpeg', '.png', '.mp4', '.mp3', '.iso'}
 EXCLUDE_DIRS = []  # add system dirs here (absolute paths)
 # -------------------------------
@@ -28,6 +29,8 @@ last_event_time = defaultdict(float)
 observer_instance: Optional[Observer] = None
 baseline: dict = {}
 alert_callback: Optional[Callable] = None
+current_session_id: Optional[str] = None
+current_session_path: Optional[str] = None
 
 def shannon_entropy_bytes(data: bytes) -> float:
     """Calculate Shannon entropy of byte data."""
@@ -96,12 +99,61 @@ def save_baseline(path: str, data: dict) -> None:
         pass
 
 
+def get_session_file(session_id: str) -> str:
+    """Get the path for a session file."""
+    if not os.path.exists(SESSIONS_DIR):
+        os.makedirs(SESSIONS_DIR)
+    return os.path.join(SESSIONS_DIR, f"session_{session_id}.json")
+
+
+def save_session_metadata(session_id: str, metadata: dict) -> None:
+    """Save session metadata."""
+    session_file = get_session_file(session_id)
+    try:
+        with open(session_file, 'r') as f:
+            session_data = json.load(f)
+    except:
+        session_data = {"files": {}}
+    
+    session_data["metadata"] = metadata
+    
+    try:
+        with open(session_file + ".tmp", 'w') as f:
+            json.dump(session_data, f, indent=2)
+        os.replace(session_file + ".tmp", session_file)
+    except Exception:
+        pass
+
+
+def list_sessions() -> list:
+    """List all available sessions."""
+    if not os.path.exists(SESSIONS_DIR):
+        return []
+    
+    sessions = []
+    for file in os.listdir(SESSIONS_DIR):
+        if file.startswith("session_") and file.endswith(".json"):
+            session_id = file.replace("session_", "").replace(".json", "")
+            try:
+                with open(os.path.join(SESSIONS_DIR, file), 'r') as f:
+                    data = json.load(f)
+                    sessions.append({
+                        "id": session_id,
+                        "metadata": data.get("metadata", {}),
+                        "file_count": len(data.get("files", {}))
+                    })
+            except:
+                pass
+    
+    return sorted(sessions, key=lambda x: x.get("metadata", {}).get("start_time", ""), reverse=True)
+
+
 def process_file(file_path: str) -> None:
     """
     Process a file, calculate entropy, check thresholds, and update baseline.
     Uses global baseline dict and alert_callback.
     """
-    global baseline, alert_callback
+    global baseline, alert_callback, current_session_id
     
     try:
         p = Path(file_path)
@@ -140,10 +192,27 @@ def process_file(file_path: str) -> None:
             if delta >= ENTROPY_DELTA_THRESHOLD:
                 is_alert = True
         
-        # Update baseline in memory and JSON file
+        # Update baseline in memory and save to session file
         with lock:
             baseline[abs_path] = entropy
-            save_baseline(BASELINE_FILE, baseline)
+            
+            # Save to session file if session is active
+            if current_session_id:
+                session_file = get_session_file(current_session_id)
+                try:
+                    with open(session_file, 'r') as f:
+                        session_data = json.load(f)
+                except:
+                    session_data = {"files": {}, "metadata": {}}
+                
+                session_data["files"][abs_path] = entropy
+                
+                try:
+                    with open(session_file + ".tmp", 'w') as f:
+                        json.dump(session_data, f, indent=2)
+                    os.replace(session_file + ".tmp", session_file)
+                except Exception:
+                    pass
         
         # Send alert if suspicious
         if is_alert:
@@ -190,18 +259,19 @@ class EntropyHandler(FileSystemEventHandler):
             t.start()
 
 
-def start_monitoring(watch_paths: list, callback: Optional[Callable] = None) -> Observer:
+def start_monitoring(watch_paths: list, callback: Optional[Callable] = None, session_id: Optional[str] = None) -> Observer:
     """
     Start entropy monitoring in background threads.
     
     Args:
         watch_paths: List of directory paths to monitor
         callback: Optional function to call with alert messages
+        session_id: Optional session ID for storing data separately
     
     Returns:
         Observer instance (call .stop() to stop monitoring)
     """
-    global observer_instance, baseline, alert_callback
+    global observer_instance, baseline, alert_callback, current_session_id, current_session_path
     
     # Stop existing observer if running
     if observer_instance is not None:
@@ -211,11 +281,22 @@ def start_monitoring(watch_paths: list, callback: Optional[Callable] = None) -> 
         except:
             pass
     
-    # Set global callback
+    # Set global callback and session
     alert_callback = callback
+    current_session_id = session_id
+    current_session_path = watch_paths[0] if watch_paths else None
     
-    # Load baseline from disk
-    baseline = load_baseline(BASELINE_FILE)
+    # Initialize baseline for this session
+    baseline = {}
+    
+    # Save session metadata
+    if session_id:
+        import datetime
+        metadata = {
+            "start_time": datetime.datetime.now().isoformat(),
+            "watch_path": watch_paths[0] if watch_paths else None
+        }
+        save_session_metadata(session_id, metadata)
     
     # Create and start observer
     event_handler = EntropyHandler()
@@ -230,7 +311,7 @@ def start_monitoring(watch_paths: list, callback: Optional[Callable] = None) -> 
 
 def stop_monitoring() -> None:
     """Stop the entropy monitor."""
-    global observer_instance, baseline
+    global observer_instance, baseline, current_session_id
     
     if observer_instance is not None:
         try:
@@ -241,9 +322,26 @@ def stop_monitoring() -> None:
         finally:
             observer_instance = None
     
-    # Save baseline on exit
-    with lock:
-        save_baseline(BASELINE_FILE, baseline)
+    # Save final session data
+    if current_session_id:
+        import datetime
+        session_file = get_session_file(current_session_id)
+        try:
+            with open(session_file, 'r') as f:
+                session_data = json.load(f)
+        except:
+            session_data = {"files": {}, "metadata": {}}
+        
+        session_data["metadata"]["end_time"] = datetime.datetime.now().isoformat()
+        
+        try:
+            with open(session_file + ".tmp", 'w') as f:
+                json.dump(session_data, f, indent=2)
+            os.replace(session_file + ".tmp", session_file)
+        except Exception:
+            pass
+        
+        current_session_id = None
 
 
 if __name__ == "__main__":
